@@ -3,6 +3,8 @@ package me.leopetrovic.fsretimetablenotify.timing;
 import lombok.extern.slf4j.Slf4j;
 import me.leopetrovic.fsretimetablenotify.messaging.MessagingService;
 import me.leopetrovic.fsretimetablenotify.messaging.dto.TimetableUpdatedMessageDto;
+import me.leopetrovic.fsretimetablenotify.messaging.exceptions.EmailSendMessageFailed;
+import me.leopetrovic.fsretimetablenotify.messaging.exceptions.FcmSendMessageFailed;
 import me.leopetrovic.fsretimetablenotify.messaging.models.MessagingSubscription;
 import me.leopetrovic.fsretimetablenotify.timetable.TimetableService;
 import me.leopetrovic.fsretimetablenotify.timetable.models.Timetable;
@@ -65,8 +67,7 @@ public class TimingService {
             final TimetableKey currentTimetableKey = new TimetableKey(
                 studyProgram.id(),
                 YearWeek.now());
-            final TimetableKey nextTimetableKey =
-                new TimetableKey(studyProgram.id(),
+            final TimetableKey nextTimetableKey = new TimetableKey(studyProgram.id(),
                 YearWeek.now().plusWeeks(1));
 
             for (TimetableKey timetableKey : new TimetableKey[]{
@@ -96,11 +97,23 @@ public class TimingService {
                                     .forEach(messagingSubscription -> {
                                         log.debug("Sending message...");
 
-                                        messagingService.sendMessage(
-                                            messagingSubscription,
-                                            new TimetableUpdatedMessageDto(
-                                                difference,
-                                                timetableKey));
+                                        try {
+                                            messagingService.sendMessage(
+                                                messagingSubscription,
+                                                new TimetableUpdatedMessageDto(
+                                                    difference,
+                                                    timetableKey));
+                                        } catch (FcmSendMessageFailed e) {
+                                            log.error(
+                                                "Couldn't send FCM timetable notification to {}: {}",
+                                                messagingSubscription.getFcmToken(),
+                                                e.getMessage());
+                                        } catch (EmailSendMessageFailed e) {
+                                            log.error(
+                                                "Couldn't send email timetable notification to {}: {}",
+                                                messagingSubscription.getEmail(),
+                                                e.getMessage());
+                                        }
                                     });
                             } else {
                                 log.debug(

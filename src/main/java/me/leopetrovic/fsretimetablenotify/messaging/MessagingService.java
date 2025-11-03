@@ -93,7 +93,8 @@ public class MessagingService {
         MessagingSubscription messagingSubscription,
         TimetableUpdatedMessageDto timetableUpdatedMessageDto
     ) {
-        if (messagingSubscription.getFcmToken().isPresent() && !FirebaseApp.getApps().isEmpty()) {
+        if (messagingSubscription.getFcmToken()
+            .isPresent() && !FirebaseApp.getApps().isEmpty()) {
             var fcmToken = messagingSubscription.getFcmToken().get();
             sendFirebaseMessage(fcmToken, timetableUpdatedMessageDto);
         } else if (messagingSubscription.getEmail().isPresent()) {
@@ -136,7 +137,7 @@ public class MessagingService {
                 "Failed to serialize timetable events to JSON",
                 e);
         } catch (FirebaseMessagingException e) {
-            throw new FcmSendMessageFailed("Failed to send message using FCM",
+            throw new FcmSendMessageFailed("FCM Error (" + e.getMessagingErrorCode() + " - " + e.getMessage() + ")",
                 e);
         }
     }
