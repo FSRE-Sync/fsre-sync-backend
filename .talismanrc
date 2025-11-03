@@ -1,0 +1,6 @@
+fileignoreconfig:
+- filename: .env.example
+  checksum: f1377871de71a65bb9bfd01ab32e191ca737c72f118f060d29b19ef406505089
+- filename: src/main/resources/application.properties
+  checksum: 4a7189c8574d0bc91b81f580401aaaedd124ac1942dc4755a7ec74c6a3982100
+version: "1.0"
