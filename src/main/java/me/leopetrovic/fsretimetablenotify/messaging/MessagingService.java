@@ -20,6 +20,7 @@ import org.springframework.stereotype.Service;
 
 import java.io.UnsupportedEncodingException;
 import java.time.Instant;
+import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
@@ -52,7 +53,8 @@ public class MessagingService {
     public MessagingSubscription subscribe(
         String email,
         String fcmToken,
-        Long studyProgramId
+        Long studyProgramId,
+        String deviceInfo
     ) {
         final List<MessagingSubscription> subscriptions = messagingRepository.findByEmailAndFcmToken(
             email,
@@ -70,6 +72,8 @@ public class MessagingService {
         messagingSubscription.setEmail(email);
         messagingSubscription.setFcmToken(fcmToken);
         messagingSubscription.setStudyProgramId(studyProgramId);
+        messagingSubscription.setCreatedAt(LocalDateTime.now());
+        messagingSubscription.setDeviceInfo(deviceInfo);
 
         return messagingRepository.save(messagingSubscription);
     }
@@ -97,9 +101,13 @@ public class MessagingService {
             .isPresent() && !FirebaseApp.getApps().isEmpty()) {
             var fcmToken = messagingSubscription.getFcmToken().get();
             sendFirebaseMessage(fcmToken, timetableUpdatedMessageDto);
+            messagingSubscription.setLastNotifiedAt(LocalDateTime.now());
+            messagingRepository.save(messagingSubscription);
         } else if (messagingSubscription.getEmail().isPresent()) {
             var email = messagingSubscription.getEmail().get();
             sendEmailMessage(email, timetableUpdatedMessageDto);
+            messagingSubscription.setLastNotifiedAt(LocalDateTime.now());
+            messagingRepository.save(messagingSubscription);
         }
     }
 

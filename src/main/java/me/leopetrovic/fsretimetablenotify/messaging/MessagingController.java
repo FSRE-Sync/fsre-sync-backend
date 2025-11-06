@@ -5,6 +5,7 @@ import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import me.leopetrovic.fsretimetablenotify.messaging.dto.MessagingSubscribeDto;
 import me.leopetrovic.fsretimetablenotify.messaging.models.MessagingSubscription;
@@ -39,14 +40,20 @@ public class MessagingController {
         )}
     )
     public ResponseEntity<MessagingSubscription> subscribe(
+        HttpServletRequest request,
         @RequestBody
         @Valid
-        MessagingSubscribeDto messagingSubscribeDto
+        MessagingSubscribeDto messagingSubscribeDto,
+        @RequestHeader("User-Agent")
+        String userAgent
     ) {
+        String deviceInfo = userAgent + " | IP: " + request.getRemoteAddr();
+
         return ResponseEntity.ok(messagingService.subscribe(
             messagingSubscribeDto.email(),
             messagingSubscribeDto.fcmToken(),
-            messagingSubscribeDto.studyProgramId()));
+            messagingSubscribeDto.studyProgramId(),
+            deviceInfo));
     }
 
     @PostMapping("/unsubscribe")
