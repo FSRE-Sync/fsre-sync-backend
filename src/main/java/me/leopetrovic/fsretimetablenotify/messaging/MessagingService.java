@@ -12,6 +12,7 @@ import me.leopetrovic.fsretimetablenotify.messaging.exceptions.FcmSendMessageFai
 import me.leopetrovic.fsretimetablenotify.messaging.exceptions.MessagingSubscriptionAlreadyRegisteredException;
 import me.leopetrovic.fsretimetablenotify.messaging.models.MessagingSubscription;
 import me.leopetrovic.fsretimetablenotify.timetable.models.TimetableEvent;
+import me.leopetrovic.fsretimetablenotify.timing.TimingService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.mail.MailException;
 import org.springframework.mail.javamail.JavaMailSender;
@@ -23,6 +24,7 @@ import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
 import java.util.List;
 
 @Service
@@ -111,31 +113,38 @@ public class MessagingService {
         }
     }
 
+    private static final int FCM_BODY_MAX_LENGTH = 180;
+
     private void sendFirebaseMessage(
         String fcmToken,
         TimetableUpdatedMessageDto timetableUpdatedMessageDto
     ) {
         try {
+            var difference = timetableUpdatedMessageDto.difference();
+            var dataSummary = TimetableChangeSummaryFormatter.buildSummary(difference);
+            var visualBody = trimForFcm(buildNotificationBody(difference));
+            var title = buildNotificationTitle(difference);
             Message message = Message.builder()
                 .setToken(fcmToken)
                 .putData("newTimetableEvents",
-                    objectMapper.writeValueAsString(timetableUpdatedMessageDto.difference()
-                        .newEvents()))
+                    objectMapper.writeValueAsString(difference.newEvents()))
                 .putData("removedTimetableEvents",
-                    objectMapper.writeValueAsString(timetableUpdatedMessageDto.difference()
-                        .removedEvents()))
+                    objectMapper.writeValueAsString(difference.removedEvents()))
                 .putData("timetableKey",
                     objectMapper.writeValueAsString(timetableUpdatedMessageDto.timetableKey()))
                 .putData("timestamp", Instant.now().toString())
+                .putData("summary", trimForFcm(dataSummary))
                 .setAndroidConfig(AndroidConfig.builder()
                     .setPriority(com.google.firebase.messaging.AndroidConfig.Priority.HIGH)
                     .setNotification(AndroidNotification.builder()
                         .setPriority(com.google.firebase.messaging.AndroidNotification.Priority.HIGH)
+                        .setTitle(title)
+                        .setBody(visualBody)
                         .build())
                     .build())
                 .setNotification(Notification.builder()
-                    .setTitle("Timetable updated")
-                    .setBody("Your timetable has been updated")
+                    .setTitle(title)
+                    .setBody(visualBody)
                     .build())
                 .build();
 
@@ -158,8 +167,13 @@ public class MessagingService {
             MimeMessage message = mailSender.createMimeMessage();
             MimeMessageHelper helper = new MimeMessageHelper(message);
 
+            var summary = TimetableChangeSummaryFormatter.buildSummary(
+                timetableUpdatedMessageDto.difference());
             StringBuilder content = new StringBuilder(
-                "<h1>Timetable updated</h1>" + "<p>Your timetable has been updated. The following changes have been made:</p>" + "<h4>New events:</h4>" + "<ul>");
+                "<h1>Timetable updated</h1>"
+                    + "<p>Your timetable has been updated. The following changes have been made:</p>"
+                    + "<p><strong>Summary:</strong> " + summary + "</p>"
+                    + "<h4>New events:</h4><ul>");
 
             for (var event : timetableUpdatedMessageDto.difference()
                 .newEvents()) {
@@ -235,5 +249,42 @@ public class MessagingService {
         content += "</ul></li>";
 
         return content;
+    }
+
+    private static String buildNotificationBody(TimingService.TimetableDifference difference) {
+        var detailLines = TimetableChangeSummaryFormatter.buildDetailLines(difference);
+        if (!detailLines.isEmpty()) {
+            return String.join("\n", detailLines);
+        }
+        return TimetableChangeSummaryFormatter.buildSummary(difference);
+    }
+
+    private static String buildNotificationTitle(TimingService.TimetableDifference difference) {
+        if (difference == null) {
+            return "Timetable updated";
+        }
+        int added = difference.newEvents().size();
+        int removed = difference.removedEvents().size();
+        var parts = new ArrayList<String>(2);
+        if (added > 0) {
+            parts.add(added + (added == 1 ? " new class" : " new classes"));
+        }
+        if (removed > 0) {
+            parts.add(removed + " removed");
+        }
+        if (parts.isEmpty()) {
+            return "Timetable updated";
+        }
+        return "Timetable: " + String.join(" · ", parts);
+    }
+
+    private static String trimForFcm(String value) {
+        if (value == null) {
+            return "";
+        }
+        if (value.length() <= FCM_BODY_MAX_LENGTH) {
+            return value;
+        }
+        return value.substring(0, FCM_BODY_MAX_LENGTH - 1) + "…";
     }
 }
