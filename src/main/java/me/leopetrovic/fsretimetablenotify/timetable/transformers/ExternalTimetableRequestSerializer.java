@@ -28,7 +28,11 @@ public class ExternalTimetableRequestSerializer extends JsonSerializer<ExternalF
             value.yearWeek().atDay(DayOfWeek.SUNDAY).toString());
         gen.writeStringField("id", value.studyProgramId().toString());
         gen.writeStringField("table", "classes");
-        gen.writeNumberField("year", value.yearWeek().getYear());
+        if (value.yearWeek().getWeek() <= 26) {
+            gen.writeNumberField("year", value.yearWeek().getYear() - 1);
+        } else {
+            gen.writeNumberField("year", value.yearWeek().getYear());
+        }
         gen.writeEndObject();
 
         gen.writeEndArray();
