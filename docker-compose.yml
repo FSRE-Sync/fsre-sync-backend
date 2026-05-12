@@ -1,10 +1,8 @@
 services:
   app:
-    container_name: app
+    container_name: fsre-timetable-notify-backend
     build: .
     restart: always
-    ports:
-      - 5000:5000
     env_file:
       - .env
     environment:
@@ -12,9 +10,12 @@ services:
     depends_on:
       db:
         condition: service_healthy
+    networks:
+      - nginx-proxy
+      - timetable_default
 
   db:
-    container_name: db
+    container_name: fsre-timetable-notify-db
     image: mariadb:latest
     restart: always
     healthcheck:
@@ -38,3 +39,11 @@ services:
       - MYSQL_PASSWORD=${MYSQL_PASSWORD}
     volumes:
       - ./db-data:/var/lib/mysql
+    networks:
+      - timetable_default
+
+networks:
+  nginx-proxy:
+    external: true
+  timetable_default:
+    driver: bridge
