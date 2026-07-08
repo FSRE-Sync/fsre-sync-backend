@@ -1,55 +1,95 @@
-# FSRE Timetable Notifier Backend
+# FSRE Timetable Notify Backend
 
-Backend for the FSRE Timetable Notifier project. Made in Spring Boot.
+Spring Boot backend that exposes a clean REST API over [Edupage](https://fsre.edupage.org)
+timetable data for FSRE (Faculty of Mechanical Engineering, Computer Science and
+Electrical Engineering), SUM (University of Mostar). Edupage has no public API - this
+service reverse-engineers it, enriches events with human-readable names, and
+polls for schedule changes to send push/email notifications.
 
-# App Flow
+**Clients:** [fsre-app](https://github.com/mapokapo/fsre-app) (official FSRE mobile app) and a separate [web
+app](https://github.com/FSRE-Timetable-Notify/fsre-timetable-notify-frontend). Both consume this API; the original Flutter notifier app is no longer maintained.
 
-## Client
+## What it does
 
-The client generates a unique FCM token which gets sent to the backend. Then, the client can pick multiple study
-programs which they want to subscribe to. These subscriptions get persisted on the backend. Then, whenever the backend
-runs a cron job which refreshes the timetables for the specific study program the current user has subscribed to, the
-client will receive a notification. These notifications get persisted locally.
+- Fetches and caches weekly timetables per study program and ISO week
+- Serves reference data (study programs, teachers, rooms, subjects)
+- Accepts FCM/email subscriptions per study program
+- Detects timetable changes every 15 minutes and notifies subscribers
 
-The client can be in a few different states:
+The API preserves all schedule-relevant Edupage information in a restructured
+form - enough to rebuild the Edupage timetable UI, without Edupage's internal cruft.
 
-1. First run:
-    - The FCM API has been initialized for the first time - the background listener gets registered.
-    - The client registers their device by sending their unique FCM token to the backend, so that they can receive
-      notifications for any subscriptions they have.
-    - The client doesn't have any subscriptions registered, so they won't receive any notifications.
-    - The client creates the necessary data holders locally for things like the notification history and theme (these
-      will have some default values set, eg. the notification history will be an empty array and the theme will be "
-      system").
-2. Cold starts:
-    - The client reads data from the offline storage (timetable database, subscriptions, notification history, theme,
-      etc.) and updates the BLoC state accordingly, thus updating the UI.
-    - The client syncs its timetable database and user subscriptions data with the backend by sending a request and
-      updating the local state and storage.
-    - The foreground listener gets connected so that messages update the BLoC state and thus the UI.
-3. Hot starts:
-    - The client detects a "hot start" (app comes to foreground from a "suspended" state), and then the notification
-      history is read from the local storage which updates the BLoC state accordingly, and thus updating the UI. This is
-      in case the client got a background notification while it was suspended, since when the app opens, the
-      initialization logic doesn't run because this is a hot start. This ensures that the notification history stays up
-      to date to the actual notifications received.
-4. Client receives notification:
-    - Whether the client is in the foreground or the background, the notification will be appended to the notification
-      history list in the local storage. This is done using a separate local storage service (called a repository in
-      Flutter BLoC).
-    - If the client is in the foreground, then the background listener won't get triggered, but the foreground listener
-      will. As well as storing the notification in the local notification history (same as the background listener, this
-      is why the local storage is a separate service, so we don't repeat ourselves), the foreground listener also
-      updates the local BLoC state so the UI gets the correct state, similar to the way the Hot start section works.
+## API
 
-## Style rules
+Base path: `/api` · OpenAPI UI: `/api/docs` (disabled in production)
 
-1. Use Java 22 records for input DTOs (request objects).
-2. Do not use custom transformation logic for input DTOs. Instead use ObjectMapper or manually create POJO instances.
-   This is to make sure the OpenAPI documentation for the request bodies is correct.
-3. Don't use records for response objects. Instead, return POJOs created manually with the help of Lombok's @Data, or
-   return JPA entities directly.
-4. If you need special transformation logic (eg. custom de/serialization logic or hiding sensitive fields from JPA
-   entities), use @JsonComponent to annotate your custom Jackson de/serializer in the `transformers` package.
-5. Use POJOs for JPA entities. Do not use Lombok's @Data with them, as it can cause issues with Hibernate. Instead, use
-   @Getter and @Setter.
+| Method | Path                                | Description                            |
+| ------ | ----------------------------------- | -------------------------------------- |
+| `GET`  | `/timetable-database`               | Reference data for filters and lookups |
+| `GET`  | `/timetable?studyProgram=&isoWeek=` | Weekly timetable for a study program   |
+| `POST` | `/messaging/subscribe`              | Subscribe to change notifications      |
+| `POST` | `/messaging/unsubscribe`            | Unsubscribe from a study program       |
+
+Subscribe body: `{ "email"?, "fcmToken"?, "studyProgramId" }` - at least one of
+`email` or `fcmToken` should be provided.
+
+## Get started
+
+### Docker (recommended)
+
+1. Copy environment variables
+
+   ```bash
+   cp .env.example .env
+   ```
+
+2. Add `service_account_key.json` (Firebase) for push notifications
+
+3. Start the stack
+
+   ```bash
+   docker compose up --build
+   ```
+
+The app listens on port `5000`. Production deploy expects an external `nginx-proxy`
+network (see `docker-compose.yml`).
+
+### Local development
+
+Requires Java 21+, MariaDB, and the same env vars as `.env.example` plus mail
+credentials (`MAIL_USERNAME`, `MAIL_PASSWORD`).
+
+```bash
+./mvnw spring-boot:run -Dspring-boot.run.profiles=dev
+```
+
+Dev profile uses `ddl-auto=create-drop` and DEBUG logging.
+
+### Client types
+
+The mobile app generates its typed client from this backend's OpenAPI spec (see
+[fsre-app README](https://github.com/mapokapo/fsre-app#api-types)). Regenerate after API changes.
+
+## Project structure
+
+```
+src/main/java/me/leopetrovic/fsretimetablenotify/
+├── timetabledatabase/   reference data from Edupage (fetch, parse, serve)
+├── timetable/           weekly timetable fetch, cache, enrichment
+├── timing/              scheduled change detection
+├── messaging/           subscriptions, FCM/email delivery
+└── common/              shared parsing, error types, properties
+```
+
+Custom Jackson serializers for Edupage's RPC wire format live in each module's
+`transformers/` package.
+
+## Code conventions
+
+1. **Request DTOs** - Java records; no custom Jackson logic (keeps OpenAPI accurate)
+2. **Response objects** - Lombok `@Data` POJOs or JPA entities, not records
+3. **JPA entities** - `@Getter`/`@Setter` only, not `@Data`
+4. **De/serialization** - `@JsonComponent` classes in `transformers/`
+5. **Errors** - module `exceptions/`, `FsreError` is the common HTTP error response shape
+
+More domain context lives in [`.cursor/rules/`](.cursor/rules/).

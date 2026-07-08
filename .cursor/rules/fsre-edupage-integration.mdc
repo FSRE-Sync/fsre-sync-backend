@@ -1,0 +1,60 @@
+---
+description: Edupage reverse-engineering, two-source data pipeline, and parsing
+globs: src/main/java/**/timetable/**,src/main/java/**/timetabledatabase/**,src/main/java/**/common/service/ParsingService.java
+alwaysApply: false
+---
+
+# FSRE / Edupage Integration
+
+## Why two upstream sources
+
+Edupage has no public REST API. This backend calls internal JS RPC endpoints on `fsre.edupage.org`.
+
+1. **Timetable** (`currenttt.js`) — weekly schedule events with IDs only (teachers, rooms, programs as numeric IDs)
+2. **Timetable database** (`maindbi.js`) — giant JSON lookup tables mapping those IDs to human-readable names
+
+Pipeline: fetch raw timetable → enrich via timetable database (`TimetableService.extendTimetable`) → apply Croatian name parsing (`ParsingService`) → serve to clients.
+
+## API parity with Edupage
+
+**Information parity, not wire parity.** Clients must be adapted to this API — it is a different shape than Edupage's RPC. But they must not gain or lose relevant timetable information: everything needed to render the Edupage timetable UI (e.g. recreate the Edupage timetable website 1:1) is present in this API.
+
+- **Kept:** all schedule-relevant Edupage data (events, times, rooms, teachers, programs, reference lookups)
+- **Removed:** Edupage cruft unused by clients
+- **Restructured:** clean REST surface — e.g. events by day-of-week, resolved names, parsed department/year/direction/type
+
+When adding fields or changing models, ask: "Would a client built only on this API be missing something Edupage shows?" If yes, that's a bug.
+
+## RPC wire format
+
+Requests use `__args` + `__gsh` JSON wrappers. Custom `@JsonComponent` serializers/deserializers live in each module's `transformers/`.
+
+| Endpoint | Parses |
+|----------|--------|
+| `currenttt.js?__func=curentttGetData` | `r.ttitems` where `type == "event"` |
+| `maindbi.js?__func=mainDBIAccessor` | `r.tables[0..4].data_rows` (teachers, subjects, rooms, classes, event types) |
+
+## Academic year quirk
+
+`ExternalTimetableRequestSerializer`: if ISO week ≤ 26, send `year = yearWeek.getYear() - 1`; else calendar year. Matches FSRE semester boundary.
+
+## Timetable event mapping
+
+- `subjectid` → `TimetableEvent.id` (deduped per day by id, first wins)
+- Times: `Europe/Sarajevo` → stored as UTC `ZonedDateTime`
+- `classids` → study program IDs; `classroomids`, `teacherids` → Long lists
+
+## Croatian parsing (`ParsingService`)
+
+| Signal | Result |
+|--------|--------|
+| `računarstv` / `elektrotehnik` / `strojarstv` | department enum |
+| `N. godina` + `preddiplomsk` | undergrad years 1–3 vs grad 4–5 |
+| direction regex after `godina,` / `god` / `god.` | specialization |
+| subject suffix `-P`, `-V`, `-P+V` | LECTURE, EXERCISE, LECTURE_AND_EXERCISE |
+
+`LABS` enum unused. Programs failing year/department parse are **dropped** in `TimetableDatabaseDeserializer` (stderr only).
+
+## Cache key
+
+`TimetableKey(studyProgramId, YearWeek)`. `studyProgramId=null` merges all programs (internal only; cron always passes an ID).

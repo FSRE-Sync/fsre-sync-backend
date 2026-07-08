@@ -1,0 +1,34 @@
+---
+description: Project-specific Java/Spring conventions (not generic best practices)
+globs: src/main/java/**/*.java
+alwaysApply: false
+---
+
+# Project Code Conventions
+
+## DTOs & API models
+
+- **Request DTOs**: Java records (OpenAPI accuracy). No custom Jackson logic on inputs.
+- **Response objects**: Lombok `@Data` POJOs or JPA entities — not records.
+- **JPA entities**: `@Getter`/`@Setter` only — not `@Data` (Hibernate issues).
+
+## Jackson customization
+
+Custom de/serializers for Edupage wire format live in each module's `transformers/` package annotated with `@JsonComponent`. Example: `ExternalTimetableRequestSerializer` builds `__args` RPC shape.
+
+## Error handling
+
+Domain exceptions live in each module's `exceptions/` package. Controllers use `*ControllerAdvice` for HTTP mapping. FSRE upstream errors: `TimetableFetchException`, `TimetableDatabaseFetchException`, parse variants. Errors get mapped to `common/dto/FsreError`.
+
+## Async patterns
+
+`TimetableService.fetchTimetable` and `getOrFetchTimetable` are `@Async` returning `CompletableFuture`. Controllers return `CompletableFuture<ResponseEntity<...>>`. Cron uses `.join()` synchronously.
+
+## Adding features — check domain impact
+
+| Change type                | Touch points                                                                                                                                 |
+| -------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| New notification field     | `TimingService.TimetableDifference`, `TimetableUpdatedMessageDto`, `MessagingService.sendFirebaseMessage`, `TimetableChangeSummaryFormatter` |
+| New study program metadata | `ParsingService`, `TimetableDatabaseDeserializer`, possibly `StudyProgram` record                                                            |
+| New subscription behavior  | `MessagingService`, `MessagingController`, `MessagingRepository`, `MessagingSubscription` entity                                             |
+| Monitoring more weeks      | `TimingService`, `FsreStartupRunner` (both hardcode current + next week)                                                                     |

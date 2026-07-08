@@ -1,0 +1,53 @@
+---
+description: FSRE Timetable Notify — purpose, domain, flows, and known gaps
+alwaysApply: true
+---
+
+# FSRE Timetable Notify Backend
+
+Spring Boot backend for **FSRE Timetable Notify**. Provides a clean timetable API over Edupage and push/email alerts on schedule changes.
+
+**Clients:** web app and the official FSRE mobile app. (The original Flutter app is sunset.)
+
+**Institution:** FSRE (Faculty of Mechanical Engineering, Computer Science and Electrical Engineering), University of Mostar (SUM). Timetables live in **Edupage** (`fsre.edupage.org`) — no public API; this backend reverse-engineers it. See `fsre-edupage-integration` rule for wire format, parsing, and API parity.
+
+## Domain
+
+| Entity | Description |
+|--------|-------------|
+| Study program | Class/major from Edupage (e.g. "Računarstvo 1. godina"); negative Long ID |
+| Timetable event | Lecture/exercise/lab — time, room, teachers; keyed by Edupage `subjectid` |
+| Timetable database | ID→name reference data: programs, teachers, rooms, subjects, event types |
+| Messaging subscription | FCM token and/or email + one `studyProgramId`; persisted in MariaDB |
+
+**Filtration units:** `studyProgramId` + ISO week (`YearWeek`). A student belongs to one study program; subscriptions are per program.
+
+## Data ownership
+
+| Data | Storage | Lifecycle |
+|------|---------|-----------|
+| Subscriptions | MariaDB (`messaging_subscriptions`) | Survives restarts |
+| Timetables | `InMemoryTimetableStore` | Lost on restart; re-warmed at startup |
+| Timetable database | `InMemoryTimetableDatabaseStore` | Fetched once at startup only |
+
+## Main flows
+
+1. **Startup** (`FsreStartupRunner`): fetch timetable DB → init Firebase → cache current+next week for **all** programs (no notifications)
+2. **Client read**: `GET /api/timetable-database`, `GET /api/timetable?studyProgram=&isoWeek=`
+3. **Subscribe/unsubscribe**: `POST /api/messaging/subscribe|unsubscribe`
+4. **Cron** (`TimingService`, 15 min): programs **with subscribers** only → refetch current+next week → diff vs cache → notify → update cache
+
+Context path `/api`. OpenAPI at `/api/docs`.
+
+## Packages
+
+`timetabledatabase/` · `timetable/` · `timing/` · `messaging/` · `common/service/ParsingService`
+
+## Known functional gaps
+
+- No `GET /messaging/subscriptions` — clients must track subscriptions locally
+- No FCM token migration; stale tokens until manual re-subscribe
+- Diff is add/remove only — reschedule shows as "1 removed, 1 added"
+- Only current + next ISO week monitored
+- Timetable database never refreshed after startup
+- Subscribe accepts missing email+FCM and unvalidated `studyProgramId` (bug)
