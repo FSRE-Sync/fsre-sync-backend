@@ -3,6 +3,7 @@
 !bun.lock
 !tsconfig.json
 !prisma.config.ts
+!docker-entrypoint.sh
 !prisma/
 !src/
 src/generated/

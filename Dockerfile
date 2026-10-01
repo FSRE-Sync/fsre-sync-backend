@@ -19,13 +19,15 @@ RUN bunx --bun prisma generate && bun run build
 # The bundle is self-contained (Prisma's query compiler is inlined), so no node_modules at runtime.
 FROM oven/bun:1.4-alpine
 WORKDIR /app
+RUN apk add --no-cache su-exec
 ENV NODE_ENV=production \
   DATABASE_URL=file:/app/data/fsre-sync-backend.db
 COPY --from=build /app/dist dist
 COPY prisma/migrations prisma/migrations
-RUN mkdir data && chown bun:bun data
-USER bun
+COPY docker-entrypoint.sh /docker-entrypoint.sh
+RUN chmod +x /docker-entrypoint.sh && mkdir data && chown bun:bun data
 EXPOSE 5000
 HEALTHCHECK --interval=30s --timeout=3s --start-period=10s \
   CMD wget -qO /dev/null http://127.0.0.1:5000/api/health || exit 1
+ENTRYPOINT ["/docker-entrypoint.sh"]
 CMD ["bun", "dist/index.js"]

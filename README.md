@@ -45,7 +45,11 @@ docker compose up -d --build
 ```
 
 The container joins the external `nginx-proxy` network and listens on port 5000.
-Migrations run on startup; the SQLite file lives in the `data` volume.
+Migrations run on startup; the SQLite database is `./data/fsre-sync-backend.db` on the host
+(bind-mounted to `/app/data`). The entrypoint hands `data/` to the container's `bun` user
+(uid 1000) on every start, because SQLite opens a database it can't write read-only and every
+write then fails with "attempt to write a readonly database". Stop the container before
+copying or replacing the database: the WAL/SHM sidecar files belong with it.
 
 Behind a registry mirror, build with `--build-arg NPM_CONFIG_REGISTRY=https://…/npm/`.
 

@@ -8,9 +8,13 @@ services:
       - path: .env
         required: false
     environment:
+      # Pin the DB to the bind mount regardless of DATABASE_URL in .env.
+      DATABASE_URL: file:/app/data/fsre-sync-backend.db
       GOOGLE_APPLICATION_CREDENTIALS: /app/service_account_key.json
+    tmpfs:
+      - /tmp
     volumes:
-      - data:/app/data
+      - ./data:/app/data
       - ./service_account_key.json:/app/service_account_key.json:ro
     deploy:
       resources:
@@ -18,9 +22,6 @@ services:
           memory: 256M
     networks:
       - nginx-proxy
-
-volumes:
-  data:
 
 networks:
   nginx-proxy:
