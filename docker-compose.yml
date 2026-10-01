@@ -1,49 +1,27 @@
 services:
   app:
-    container_name: fsre-timetable-notify-backend
+    container_name: fsre-sync
     build: .
-    restart: always
+    restart: unless-stopped
+    read_only: true
     env_file:
-      - .env
+      - path: .env
+        required: false
     environment:
-      - GOOGLE_APPLICATION_CREDENTIALS=/app/service_account_key.json
-    depends_on:
-      db:
-        condition: service_healthy
+      GOOGLE_APPLICATION_CREDENTIALS: /app/service_account_key.json
+    volumes:
+      - data:/app/data
+      - ./service_account_key.json:/app/service_account_key.json:ro
+    deploy:
+      resources:
+        limits:
+          memory: 256M
     networks:
       - nginx-proxy
-      - timetable_default
 
-  db:
-    container_name: fsre-timetable-notify-db
-    image: mariadb:latest
-    restart: always
-    healthcheck:
-      interval: 5s
-      timeout: 5s
-      retries: 10
-      test:
-        [
-          "CMD",
-          "healthcheck.sh",
-          "--su-mysql",
-          "--connect",
-          "--innodb_initialized",
-        ]
-    env_file:
-      - .env
-    environment:
-      - MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD}
-      - MYSQL_DATABASE=${MYSQL_DATABASE}
-      - MYSQL_USER=${MYSQL_USER}
-      - MYSQL_PASSWORD=${MYSQL_PASSWORD}
-    volumes:
-      - ./db-data:/var/lib/mysql
-    networks:
-      - timetable_default
+volumes:
+  data:
 
 networks:
   nginx-proxy:
     external: true
-  timetable_default:
-    driver: bridge

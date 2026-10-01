@@ -1,0 +1,31 @@
+generator client {
+  provider               = "prisma-client"
+  output                 = "../src/generated/prisma"
+  runtime                = "bun"
+  importFileExtension    = "ts"
+  generatedFileExtension = "ts"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+model Subscription {
+  id             String    @id @default(uuid())
+  /// Name of the transport that delivers to `address` (see `Channel` in src/notify.ts)
+  channel        String
+  /// FCM registration token, email address, …
+  address        String
+  studyProgramId Int
+  /// IANA time zone that notification times are shown in
+  timeZone       String
+  deviceInfo     String
+  createdAt      DateTime  @default(now())
+  /// Bumped by every notification and every re-subscription; stale rows are pruned by it
+  updatedAt      DateTime  @updatedAt
+  lastNotifiedAt DateTime?
+
+  @@unique([channel, address, studyProgramId])
+  @@index([studyProgramId])
+  @@map("subscriptions")
+}

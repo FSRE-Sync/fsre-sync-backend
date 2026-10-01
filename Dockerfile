@@ -1,31 +1,31 @@
-FROM eclipse-temurin:22-jdk-alpine AS build
-
+# syntax=docker/dockerfile:1
+FROM oven/bun:1.4-alpine AS build
 WORKDIR /app
 
-COPY .env .env
-COPY mvnw .
-COPY .mvn .mvn
-COPY pom.xml .
+# Optional registry mirror, e.g. `--build-arg NPM_CONFIG_REGISTRY=https://mirror.example/npm/`.
+ARG NPM_CONFIG_REGISTRY
+COPY package.json bun.lock ./
+# bun.lock pins tarball URLs of whichever registry created it; resolve against the configured one instead
+# (integrity hashes are still verified).
+RUN --mount=type=cache,target=/root/.bun/install/cache \
+    sed -i -E 's#"https?://[^"]+\.tgz"#""#g' bun.lock \
+ && bun install --frozen-lockfile --ignore-scripts
 
-RUN ./mvnw dependency:go-offline -B
-
+COPY tsconfig.json prisma.config.ts ./
+COPY prisma prisma
 COPY src src
+RUN bunx --bun prisma generate && bun run build
 
-RUN ./mvnw clean verify package spring-boot:repackage -DskipTests
-
-FROM eclipse-temurin:22-jdk-alpine
-
-RUN addgroup -S spring && adduser -S spring -G spring
-USER spring:spring
-
-VOLUME /tmp
-
+# The bundle is self-contained (Prisma's query compiler is inlined), so no node_modules at runtime.
+FROM oven/bun:1.4-alpine
 WORKDIR /app
-
-COPY service_account_key.json service_account_key.json
-
-COPY --from=build /app/target/fsretimetablenotify-0.0.1-SNAPSHOT.jar fsretimetablenotify-0.0.1-SNAPSHOT.jar
-
+ENV NODE_ENV=production \
+    DATABASE_URL=file:/app/data/fsre-sync.db
+COPY --from=build /app/dist dist
+COPY prisma/migrations prisma/migrations
+RUN mkdir data && chown bun:bun data
+USER bun
 EXPOSE 5000
-
-ENTRYPOINT ["java", "-jar", "fsretimetablenotify-0.0.1-SNAPSHOT.jar", "--spring.profiles.active=prod"]
+HEALTHCHECK --interval=30s --timeout=3s --start-period=10s \
+  CMD wget -qO /dev/null http://127.0.0.1:5000/api/health || exit 1
+CMD ["bun", "dist/index.js"]

@@ -1,0 +1,33 @@
+{
+  "name": "fsre-sync",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "bun --watch src/index.ts",
+    "start": "bun src/index.ts",
+    "build": "bun build src/index.ts --target=bun --minify-syntax --minify-whitespace --sourcemap=linked --outdir=dist",
+    "generate": "prisma generate",
+    "migrate": "prisma migrate dev",
+    "typecheck": "tsc",
+    "lint": "oxlint",
+    "test": "bun test",
+    "check": "bun run typecheck && bun run lint && bun test",
+    "postinstall": "prisma generate"
+  },
+  "dependencies": {
+    "@hono/swagger-ui": "^0.6.1",
+    "@hono/zod-openapi": "^1.6.3",
+    "@prisma/client": "7.10.0",
+    "hono": "^4.13.8",
+    "nodemailer": "^10.0.10",
+    "prisma-adapter-bun-sqlite": "^0.8.0",
+    "zod": "^4.6.5"
+  },
+  "devDependencies": {
+    "@types/bun": "^1.4.2",
+    "oxlint": "^1.85.0",
+    "oxlint-tsgolint": "^7.0.2002",
+    "prisma": "7.10.0",
+    "typescript": "^7.0.2"
+  }
+}
