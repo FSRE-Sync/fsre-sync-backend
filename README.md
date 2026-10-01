@@ -1,6 +1,6 @@
-# fsre-sync
+# fsre-sync-backend
 
-Backend for **FSRE Timetable Notify**: a clean timetable API over FSRE's Edupage
+Backend for the **FSRE Sync** project: a clean timetable API over FSRE's Edupage
 (`fsre.edupage.org`, which has no public API) plus push (FCM) and email notifications when a
 subscribed study program's timetable changes. Both channels are optional; without them it
 is just the timetable API.
@@ -28,7 +28,7 @@ Bun · Hono (`@hono/zod-openapi`) · Prisma 7 on SQLite (`bun:sqlite`) · zod ·
   are deleted (so are tokens FCM reports as unregistered), and at most `MAX_SUBSCRIPTIONS`
   are accepted.
 - Timetables served by the API are cached in memory for 15 minutes. Subscriptions are the
-  only persisted data (`data/fsre-sync.db`).
+  only persisted data (`data/fsre-sync-backend.db`).
 
 ### Adding a notification channel
 
@@ -60,14 +60,14 @@ bun run migrate      # after editing prisma/schema.prisma
 
 ## API
 
-| Method | Path                                    | Description                                          |
-| ------ | --------------------------------------- | ---------------------------------------------------- |
-| `GET`  | `/api/timetable-database`               | Study programs, teachers, rooms, subjects, event types |
-| `GET`  | `/api/timetable?studyProgram=&isoWeek=` | Weekly timetable (omit `studyProgram` to merge all)  |
-| `POST` | `/api/messaging/subscribe`              | `{ fcmToken?, email?, studyProgramId, timeZone? }` |
-| `POST` | `/api/messaging/unsubscribe`            | `{ fcmToken?, email?, studyProgramId }`; idempotent |
-| `GET`/`POST` | `/api/messaging/unsubscribe/{id}` | Email unsubscribe link (GET confirms, POST deletes) |
-| `GET`  | `/api/health`                           | Liveness and enabled notification channels           |
+| Method       | Path                                    | Description                                            |
+| ------------ | --------------------------------------- | ------------------------------------------------------ |
+| `GET`        | `/api/timetable-database`               | Study programs, teachers, rooms, subjects, event types |
+| `GET`        | `/api/timetable?studyProgram=&isoWeek=` | Weekly timetable (omit `studyProgram` to merge all)    |
+| `POST`       | `/api/messaging/subscribe`              | `{ fcmToken?, email?, studyProgramId, timeZone? }`     |
+| `POST`       | `/api/messaging/unsubscribe`            | `{ fcmToken?, email?, studyProgramId }`; idempotent    |
+| `GET`/`POST` | `/api/messaging/unsubscribe/{id}`       | Email unsubscribe link (GET confirms, POST deletes)    |
+| `GET`        | `/api/health`                           | Liveness and enabled notification channels             |
 
 Subscribe needs at least one of `fcmToken` and `email` and returns one subscription per
 destination. Subscribing again is not an error: it updates the time zone and restarts the
@@ -86,35 +86,35 @@ already localized to the subscriber's `timeZone`.
 
 ## Configuration
 
-| Variable                         | Default                                             |
-| -------------------------------- | --------------------------------------------------- |
-| `PORT`                           | `5000`                                              |
-| `DATABASE_URL`                   | `file:./data/fsre-sync.db`                          |
-| `EDUPAGE_URL`                    | `https://fsre.edupage.org`                          |
-| `SYNC_CRON`                      | `*/15 * * * *`                                      |
-| `LOG_LEVEL`                      | `info`                                              |
-| `SUBSCRIPTION_TTL_DAYS`          | `365`                                               |
-| `MAX_SUBSCRIPTIONS`              | `10000`                                             |
-| `GOOGLE_APPLICATION_CREDENTIALS` | unset (push disabled)                               |
-| `MAIL_USERNAME`, `MAIL_PASSWORD` | unset (email disabled)                              |
-| `PUBLIC_URL`                     | unset; needed for email (origin serving `/api`)     |
-| `SMTP_HOST`, `SMTP_PORT`         | `smtp.gmail.com`, `587` (STARTTLS; `465` uses TLS)  |
-| `MAIL_FROM`                      | `FSRE Notifier <MAIL_USERNAME>`                     |
+| Variable                         | Default                                            |
+| -------------------------------- | -------------------------------------------------- |
+| `PORT`                           | `5000`                                             |
+| `DATABASE_URL`                   | `file:./data/fsre-sync-backend.db`                 |
+| `EDUPAGE_URL`                    | `https://fsre.edupage.org`                         |
+| `SYNC_CRON`                      | `*/15 * * * *`                                     |
+| `LOG_LEVEL`                      | `info`                                             |
+| `SUBSCRIPTION_TTL_DAYS`          | `365`                                              |
+| `MAX_SUBSCRIPTIONS`              | `10000`                                            |
+| `GOOGLE_APPLICATION_CREDENTIALS` | unset (push disabled)                              |
+| `MAIL_USERNAME`, `MAIL_PASSWORD` | unset (email disabled)                             |
+| `PUBLIC_URL`                     | unset; needed for email (origin serving `/api`)    |
+| `SMTP_HOST`, `SMTP_PORT`         | `smtp.gmail.com`, `587` (STARTTLS; `465` uses TLS) |
+| `MAIL_FROM`                      | `FSRE Notifier <MAIL_USERNAME>`                    |
 
 ## Code
 
-| File              | Contents                                                          |
-| ----------------- | ----------------------------------------------------------------- |
-| `src/model.ts`    | API schemas (also the TS types and OpenAPI spec), ISO weeks, diff |
-| `src/edupage.ts`  | Edupage RPC client, wire format validation, Croatian name parsing |
-| `src/sync.ts`     | In-memory state, cached timetable reads, the change-detection job |
-| `src/notify.ts`   | `Transport` interface, delivery bookkeeping, shared wording       |
-| `src/fcm.ts`      | FCM HTTP v1 transport (service account JWT), push messages        |
-| `src/email.ts`    | SMTP transport (nodemailer, loaded only if configured), emails    |
-| `src/api.ts`      | Hono routes                                                       |
-| `src/db.ts`       | Prisma client and startup migrations                              |
-| `src/result.ts`   | `Result<T, E>`                                                    |
-| `src/config.ts`   | Environment and logging                                           |
+| File             | Contents                                                          |
+| ---------------- | ----------------------------------------------------------------- |
+| `src/model.ts`   | API schemas (also the TS types and OpenAPI spec), ISO weeks, diff |
+| `src/edupage.ts` | Edupage RPC client, wire format validation, Croatian name parsing |
+| `src/sync.ts`    | In-memory state, cached timetable reads, the change-detection job |
+| `src/notify.ts`  | `Transport` interface, delivery bookkeeping, shared wording       |
+| `src/fcm.ts`     | FCM HTTP v1 transport (service account JWT), push messages        |
+| `src/email.ts`   | SMTP transport (nodemailer, loaded only if configured), emails    |
+| `src/api.ts`     | Hono routes                                                       |
+| `src/db.ts`      | Prisma client and startup migrations                              |
+| `src/result.ts`  | `Result<T, E>`                                                    |
+| `src/config.ts`  | Environment and logging                                           |
 
 Expected failures (Edupage down, invalid input, FCM rejections) are `Result` values with
 exhaustively matched error unions; `oxlint` runs type-aware and rejects `any`, type

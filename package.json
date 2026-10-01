@@ -1,5 +1,5 @@
 {
-  "name": "fsre-sync",
+  "name": "fsre-sync-backend",
   "private": true,
   "type": "module",
   "scripts": {

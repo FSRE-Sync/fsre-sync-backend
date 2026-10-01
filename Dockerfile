@@ -8,8 +8,8 @@ COPY package.json bun.lock ./
 # bun.lock pins tarball URLs of whichever registry created it; resolve against the configured one instead
 # (integrity hashes are still verified).
 RUN --mount=type=cache,target=/root/.bun/install/cache \
-    sed -i -E 's#"https?://[^"]+\.tgz"#""#g' bun.lock \
- && bun install --frozen-lockfile --ignore-scripts
+  sed -i -E 's#"https?://[^"]+\.tgz"#""#g' bun.lock \
+  && bun install --frozen-lockfile --ignore-scripts
 
 COPY tsconfig.json prisma.config.ts ./
 COPY prisma prisma
@@ -20,7 +20,7 @@ RUN bunx --bun prisma generate && bun run build
 FROM oven/bun:1.4-alpine
 WORKDIR /app
 ENV NODE_ENV=production \
-    DATABASE_URL=file:/app/data/fsre-sync.db
+  DATABASE_URL=file:/app/data/fsre-sync-backend.db
 COPY --from=build /app/dist dist
 COPY prisma/migrations prisma/migrations
 RUN mkdir data && chown bun:bun data

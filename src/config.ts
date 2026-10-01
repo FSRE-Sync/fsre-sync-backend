@@ -5,13 +5,19 @@ type Level = (typeof LEVELS)[number];
 
 /** Unset and empty (`KEY=`) are the same thing in env files. */
 const optional = <Schema extends z.ZodType>(schema: Schema) =>
-  z.preprocess((value) => (value === "" ? undefined : value), schema.optional());
+  z.preprocess(
+    (value) => (value === "" ? undefined : value),
+    schema.optional(),
+  );
 
 const count = z.coerce.number().int().positive();
 
 const Env = z.object({
   PORT: count.default(5000),
-  DATABASE_URL: z.string().startsWith("file:").default("file:./data/fsre-sync.db"),
+  DATABASE_URL: z
+    .string()
+    .startsWith("file:")
+    .default("file:./data/fsre-sync-backend.db"),
   EDUPAGE_URL: z.url().default("https://fsre.edupage.org"),
   SYNC_CRON: z.string().default("*/15 * * * *"),
   LOG_LEVEL: z.enum(LEVELS).default("info"),
